@@ -8,22 +8,22 @@ using System.Windows.Forms;
 
 namespace Club_Management
 {
-    public class Club_Management : Script
+    class Club_Management : Script
     {
-        Ped Player = Game.Player.Character;
+        private Ped Player = Game.Player.Character;
 
-        int maxDrunk = 1;
-        List<Ped> groupMembers = new List<Ped>();
+        private const int maxDrunk = 1;
+        private List<Ped> groupMembers = new List<Ped>();
 
-        bool firstRun = true;
-        bool isManaging;
-        bool noGuns;
-        bool policeIgnore;
-        bool kickingOut;
-        bool interiorLoaded;
+        private bool firstRun = true;
+        private bool isManaging;
+        private bool noGuns;
+        private bool policeIgnore;
+        private bool kickingOut;
+        private bool interiorLoaded;
 
-        Stopwatch stopWatch = new Stopwatch();
-        Stopwatch watchPed = new Stopwatch();
+        private Stopwatch watchMoney = new Stopwatch();
+        private Stopwatch watchPed = new Stopwatch();
 
         public Club_Management()
         {
@@ -34,7 +34,7 @@ namespace Club_Management
             Interval = 10;
         }
 
-        public void OnTick(object sender, EventArgs e)
+        private void OnTick(object sender, EventArgs e)
         {
             if (firstRun)
             {
@@ -69,9 +69,9 @@ namespace Club_Management
                     Ped[] AllPeds = World.GetAllPeds();
                     foreach (Ped P in AllPeds)
                     {
-                        var PedsOutside = Function.Call<bool>(Hash._ARE_COORDS_COLLIDING_WITH_EXTERIOR, P.Position.X, P.Position.Y, P.Position.Z);
+                        var pedsOutside = Function.Call<bool>(Hash._ARE_COORDS_COLLIDING_WITH_EXTERIOR, P.Position.X, P.Position.Y, P.Position.Z);
 
-                        if (P != Player && !PedsOutside)
+                        if (P != Player && !pedsOutside)
                         {
                             Function.Call(Hash.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS, P, 1);
                             Function.Call(Hash.SET_PED_FLEE_ATTRIBUTES, P, 0, 0);
@@ -84,9 +84,9 @@ namespace Club_Management
 
                 if (isManaging)
                 {
-                    if(!stopWatch.IsRunning)
+                    if(!watchMoney.IsRunning)
                     {
-                        stopWatch.Start();
+                        watchMoney.Start();
                     }
 
                     if (groupMembers.Count < maxDrunk)
@@ -171,18 +171,26 @@ namespace Club_Management
 
                 if (!isManaging)
                 {
-                    if(stopWatch.IsRunning)
+                    if(watchMoney.IsRunning)
                     {
-                        stopWatch.Stop();
-                        var timeElapsed = stopWatch.Elapsed.Minutes;
+                        watchMoney.Stop();
+                        var timeElapsed = watchMoney.Elapsed.Minutes;
                         var moneyMade = timeElapsed * 1000;
                         Game.Player.Money += moneyMade;
-                        stopWatch.Reset();
+                        watchMoney.Reset();
                     }
 
                     if (Player.IsInRangeOf(new Vector3(-566.7609f, 280.0294f, 82.9757f), 1f))
                     {
-                        helpText("Press ~INPUT_CONTEXT~ to manage the club.");
+                        if(Game.Player.WantedLevel == 0)
+                        {
+                            helpText("Press ~INPUT_CONTEXT~ to manage the club.");
+                        }
+
+                        if(Game.Player.WantedLevel > 0)
+                        {
+                            helpText("You cannot manage the club with a wanted level.");
+                        }
                     }
 
                     if (groupMembers.Count > 0)
@@ -272,27 +280,27 @@ namespace Club_Management
                 {
                     isManaging = !isManaging;
 
-                    if (stopWatch.IsRunning)
+                    if (watchMoney.IsRunning)
                     {
-                        stopWatch.Stop();
-                        var timeElapsed = stopWatch.Elapsed.Minutes;
+                        watchMoney.Stop();
+                        var timeElapsed = watchMoney.Elapsed.Minutes;
                         var moneyMade = timeElapsed * 1000;
                         Game.Player.Money += moneyMade;
-                        stopWatch.Reset();
+                        watchMoney.Reset();
                     }
                 }
             }
         }
 
-        public void OnKeyDown(object sender, KeyEventArgs e)
+        private void OnKeyDown(object sender, KeyEventArgs e)
         {
         }
 
-        public void OnKeyUp(object sender, KeyEventArgs e)
+        private void OnKeyUp(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.E)
             {
-                if (Player.IsInRangeOf(new Vector3(-566.7609f, 280.0294f, 82.9757f), 1f))
+                if (Player.IsInRangeOf(new Vector3(-566.7609f, 280.0294f, 82.9757f), 1f) && Game.Player.WantedLevel == 0)
                 {
                     isManaging = !isManaging;
                 }
@@ -343,55 +351,57 @@ namespace Club_Management
             }
         }
 
-        void helpText(string text)
+        private void helpText(string text)
         {
             Function.Call(Hash._SET_TEXT_COMPONENT_FORMAT, "STRING");
             Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, text);
             Function.Call(Hash._0x238FFE5C7B0498A6, 0, 0, 1, -1);
         }
 
-        public void spawnDrunk()
+        private void spawnDrunk()
         {
-            Ped[] nearbyPeds = World.GetAllPeds();
+            List<Ped> allowedPeds = new List<Ped>();
 
-            foreach(Ped P in nearbyPeds)
+            foreach (Ped P in World.GetAllPeds())
             {
-                var PedsOutside = Function.Call<bool>(Hash._ARE_COORDS_COLLIDING_WITH_EXTERIOR, P.Position.X, P.Position.Y, P.Position.Z);
+                var pedExists = Function.Call<bool>(Hash.DOES_ENTITY_EXIST, P);
 
-                if (PedsOutside)
+                if (pedExists)
                 {
-                    var pedIndex = Array.IndexOf(nearbyPeds, P);
-                    Array.Clear(nearbyPeds, pedIndex, 1);
+                    var pedOutside = Function.Call<bool>(Hash._ARE_COORDS_COLLIDING_WITH_EXTERIOR, P.Position.X, P.Position.Y, P.Position.Z);
+
+                    if (!pedOutside)
+                    {
+                        allowedPeds.Add(P);
+                    }
+
                 }
+
             }
 
             Random getPed = new Random();
 
-            Ped Drunk = nearbyPeds[getPed.Next(0, nearbyPeds.Length)];
+            Ped Drunk = allowedPeds[getPed.Next(0, allowedPeds.Count)];
 
-            if (Drunk != Player)
-            {
-                Function.Call(Hash.REQUEST_CLIP_SET, "move_m@drunk@verydrunk");
-                Function.Call(Hash.SET_PED_MOVEMENT_CLIPSET, Drunk, "move_m@drunk@verydrunk", 1.0f);
+            Function.Call(Hash.REQUEST_CLIP_SET, "move_m@drunk@verydrunk");
+            Function.Call(Hash.SET_PED_MOVEMENT_CLIPSET, Drunk, "move_m@drunk@verydrunk", 1.0f);
+            Function.Call(Hash.SET_PED_CAN_RAGDOLL, Drunk, false);
 
-                Function.Call(Hash.SET_PED_CAN_RAGDOLL, Drunk, false);
+            groupMembers.Add(Drunk);
 
-                groupMembers.Add(Drunk);
+            Drunk.AddBlip();
+            Drunk.CurrentBlip.Sprite = BlipSprite.ChatBubble;
+            helpText("The ~h~chat bubble~h~ indicates an unruly guest. Go and deal with them.");
 
-                Drunk.AddBlip();
-                Drunk.CurrentBlip.Sprite = BlipSprite.ChatBubble;
-                helpText("The ~h~chat bubble~h~ indicates an unruly guest. Go and deal with them.");
+            Drunk.AlwaysKeepTask = true;
+            Drunk.Task.WanderAround(Drunk.Position, 2f);
 
-                Drunk.AlwaysKeepTask = true;
-                Drunk.Task.WanderAround(Drunk.Position, 2f);
-            }
-
-            Array.Clear(nearbyPeds, 0, nearbyPeds.Length);
+            allowedPeds.Clear();
 
             watchPed.Reset();
         }
 
-        public void pedPassive()
+        private void pedPassive()
         {
             groupMembers[0].Task.ClearAllImmediately();
             Function.Call(Hash.TASK_LOOK_AT_ENTITY, groupMembers[0], Player, -1, 2048, 3);
@@ -406,7 +416,7 @@ namespace Club_Management
             groupMembers[0].Task.FleeFrom(Player);
         }
 
-        public void pedAggressive()
+        private void pedAggressive()
         {
             groupMembers[0].Task.ClearAllImmediately();
             Function.Call(Hash.SET_PED_COMBAT_ATTRIBUTES, groupMembers[0], 46, true);
