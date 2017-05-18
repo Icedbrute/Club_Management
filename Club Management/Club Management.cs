@@ -364,19 +364,21 @@ namespace Club_Management
 
             foreach (Ped P in World.GetAllPeds())
             {
-                var pedExists = Function.Call<bool>(Hash.DOES_ENTITY_EXIST, P);
-
-                if (pedExists)
+                if(P != Player)
                 {
-                    var pedOutside = Function.Call<bool>(Hash._ARE_COORDS_COLLIDING_WITH_EXTERIOR, P.Position.X, P.Position.Y, P.Position.Z);
+                    var pedExists = Function.Call<bool>(Hash.DOES_ENTITY_EXIST, P);
 
-                    if (!pedOutside)
+                    if (pedExists)
                     {
-                        allowedPeds.Add(P);
+                        var pedOutside = Function.Call<bool>(Hash._ARE_COORDS_COLLIDING_WITH_EXTERIOR, P.Position.X, P.Position.Y, P.Position.Z);
+
+                        if (!pedOutside)
+                        {
+                            allowedPeds.Add(P);
+                        }
+
                     }
-
                 }
-
             }
 
             Random getPed = new Random();
