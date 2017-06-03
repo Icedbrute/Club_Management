@@ -11,6 +11,7 @@ namespace Club_Management
     class Club_Management : Script
     {
         private Ped Player = Game.Player.Character;
+        private Ped Drunk = null;
 
         private const int maxDrunk = 1;
         private List<Ped> groupMembers = new List<Ped>();
@@ -25,6 +26,8 @@ namespace Club_Management
         private Stopwatch watchMoney = new Stopwatch();
         private Stopwatch watchPed = new Stopwatch();
 
+        private Blip blipLocation = null;
+
         public Club_Management()
         {
             Tick += OnTick;
@@ -38,7 +41,7 @@ namespace Club_Management
         {
             if (firstRun)
             {
-                Blip blipLocation = World.CreateBlip(new Vector3(-566.7609f, 280.0294f, 82.9757f));
+                blipLocation = World.CreateBlip(new Vector3(-566.7609f, 280.0294f, 82.9757f));
                 blipLocation.Sprite = BlipSprite.Bar;
                 blipLocation.Name = "Club Management";
                 blipLocation.IsShortRange = true;
@@ -59,19 +62,19 @@ namespace Club_Management
                     interiorLoaded = !interiorLoaded;
                 }
 
-                var coordsColliding = Function.Call<bool>(Hash._ARE_COORDS_COLLIDING_WITH_EXTERIOR, Player.Position.X, Player.Position.Y, Player.Position.Z);
-                var interiorReady = Function.Call<bool>(Hash.IS_INTERIOR_READY, Function.Call<int>(Hash.GET_INTERIOR_AT_COORDS, -556.5089111328125, 286.318115234375, 81.1763));
+                var interiorIDPlayer = Function.Call<int>(Hash.GET_INTERIOR_FROM_ENTITY, Player);
+                var interiorLocation = Function.Call<int>(Hash.GET_INTERIOR_AT_COORDS, -556.5089111328125, 286.318115234375, 81.1763);
 
-                if (!coordsColliding && interiorReady)
+                if (interiorIDPlayer == interiorLocation)
                 {
                     Function.Call(Hash.DRAW_MARKER, 2, -566.7609f, 280.0294f, 84.1757f, 0.0f, 0.0f, 0.0f, 180.0f, 0.0f, 0.0f, 0.75f, 0.75f, 0.75f, 204, 204, 0, 50, true, false, 2, true, false, false, false);
 
                     Ped[] AllPeds = World.GetAllPeds();
                     foreach (Ped P in AllPeds)
                     {
-                        var pedsOutside = Function.Call<bool>(Hash._ARE_COORDS_COLLIDING_WITH_EXTERIOR, P.Position.X, P.Position.Y, P.Position.Z);
+                        var pedsInInterior = Function.Call<int>(Hash.GET_INTERIOR_FROM_ENTITY, P);
 
-                        if (P != Player && !pedsOutside)
+                        if (P != Player && pedsInInterior == interiorLocation)
                         {
                             Function.Call(Hash.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS, P, 1);
                             Function.Call(Hash.SET_PED_FLEE_ATTRIBUTES, P, 0, 0);
@@ -125,43 +128,42 @@ namespace Club_Management
                         isManaging = !isManaging;
                     }
 
-                    if(groupMembers.Count > 0)
+                    if (groupMembers.Count > 0)
                     {
-                        if(Player.IsInRangeOf(groupMembers[0].Position, 1f))
+                        if (Player.IsInRangeOf(Drunk.Position, 1f))
                         {
-                            if(!kickingOut)
+                            if (!kickingOut)
                             {
                                 helpText("Press ~INPUT_CONTEXT~ to kick out guest.");
                             }
                         }
 
-                        if(groupMembers[0].IsInCombat)
+                        if (Drunk.IsInCombat)
                         {
-                            if(groupMembers[0].Health < 25)
+                            if (Drunk.Health < 25)
                             {
-                                groupMembers[0].Task.ClearAllImmediately();
-                                groupMembers[0].Task.FleeFrom(Player);
+                                Drunk.Task.ClearAllImmediately();
+                                Drunk.Task.FleeFrom(Player);
                             }
                         }
 
-                        for (int i = 0; i < groupMembers.Count; i++)
+                        if (Drunk.IsDead || Drunk.IsFleeing)
                         {
-                            if (groupMembers[i].IsDead || groupMembers[i].IsFleeing)
+                            if (Drunk.CurrentBlip.Exists())
                             {
-                                if (groupMembers[i].CurrentBlip.Exists())
-                                {
-                                    groupMembers[i].CurrentBlip.Remove();
-                                }
-                                groupMembers[i].MarkAsNoLongerNeeded();
-                                groupMembers.RemoveAt(i);
+                                Drunk.CurrentBlip.Remove();
+                            }
+                            Drunk.MarkAsNoLongerNeeded();
+                            groupMembers.Remove(Drunk);
 
-                                if(kickingOut)
-                                {
-                                    kickingOut = !kickingOut;
-                                }
+                            if (kickingOut)
+                            {
+                                kickingOut = !kickingOut;
                             }
                         }
                     }
+
+                        var coordsColliding = Function.Call<bool>(Hash._ARE_COORDS_COLLIDING_WITH_EXTERIOR, Player.Position.X, Player.Position.Y, Player.Position.Z);
 
                     if (coordsColliding)
                     {
@@ -177,6 +179,7 @@ namespace Club_Management
                         var timeElapsed = watchMoney.Elapsed.Minutes;
                         var moneyMade = timeElapsed * 1000;
                         Game.Player.Money += moneyMade;
+                        UI.Notify("You have been paid $" + (moneyMade));
                         watchMoney.Reset();
                     }
 
@@ -195,17 +198,14 @@ namespace Club_Management
 
                     if (groupMembers.Count > 0)
                     {
-                        for (int i = 0; i < groupMembers.Count; i++)
+                        if (Drunk.IsAlive)
                         {
-                            if (groupMembers[i].IsAlive)
+                            if (Drunk.CurrentBlip.Exists())
                             {
-                                if (groupMembers[i].CurrentBlip.Exists())
-                                {
-                                    groupMembers[i].CurrentBlip.Remove();
-                                }
-                                groupMembers[i].MarkAsNoLongerNeeded();
-                                groupMembers.RemoveAt(i);
+                                Drunk.CurrentBlip.Remove();
                             }
+                            Drunk.MarkAsNoLongerNeeded();
+                            groupMembers.Remove(Drunk);
                         }
                     }
 
@@ -250,17 +250,14 @@ namespace Club_Management
 
                 if (groupMembers.Count > 0)
                 {
-                    for (int i = 0; i < groupMembers.Count; i++)
+                    if (Drunk.IsAlive)
                     {
-                        if (groupMembers[i].IsAlive)
+                        if (Drunk.CurrentBlip.Exists())
                         {
-                            if (groupMembers[i].CurrentBlip.Exists())
-                            {
-                                groupMembers[i].CurrentBlip.Remove();
-                            }
-                            groupMembers[i].MarkAsNoLongerNeeded();
-                            groupMembers.RemoveAt(i);
+                            Drunk.CurrentBlip.Remove();
                         }
+                        Drunk.MarkAsNoLongerNeeded();
+                        groupMembers.Remove(Drunk);
                     }
                 }
 
@@ -309,7 +306,7 @@ namespace Club_Management
                 {
                     if (groupMembers.Count > 0)
                     {
-                        if (Player.IsInRangeOf(groupMembers[0].Position, 1f))
+                        if (Player.IsInRangeOf(Drunk.Position, 1f))
                         {
                             if(!kickingOut)
                             {
@@ -339,14 +336,15 @@ namespace Club_Management
             {
                 if (groupMembers.Count > 0)
                 {
-                    for (int i = 0; i < groupMembers.Count; i++)
+                    if (Drunk.CurrentBlip.Exists())
                     {
-                        if (groupMembers[i].CurrentBlip.Exists())
-                        {
-                            groupMembers[i].CurrentBlip.Remove();
-                        }
-                        groupMembers[i].Delete();
+                        Drunk.CurrentBlip.Remove();
                     }
+                    Drunk.Delete();
+                }
+                if(Blip.Exists(blipLocation))
+                {
+                    blipLocation.Remove();
                 }
             }
         }
@@ -370,9 +368,10 @@ namespace Club_Management
 
                     if (pedExists)
                     {
-                        var pedOutside = Function.Call<bool>(Hash._ARE_COORDS_COLLIDING_WITH_EXTERIOR, P.Position.X, P.Position.Y, P.Position.Z);
+                        var interiorIDPed = Function.Call<int>(Hash.GET_INTERIOR_FROM_ENTITY, P);
+                        var interiorLocation = Function.Call<int>(Hash.GET_INTERIOR_AT_COORDS, -556.5089111328125, 286.318115234375, 81.1763);
 
-                        if (!pedOutside)
+                        if (interiorIDPed == interiorLocation)
                         {
                             allowedPeds.Add(P);
                         }
@@ -383,10 +382,13 @@ namespace Club_Management
 
             Random getPed = new Random();
 
-            Ped Drunk = allowedPeds[getPed.Next(0, allowedPeds.Count)];
+            Drunk = allowedPeds[getPed.Next(0, allowedPeds.Count)];
 
-            Function.Call(Hash.REQUEST_CLIP_SET, "move_m@drunk@verydrunk");
-            Function.Call(Hash.SET_PED_MOVEMENT_CLIPSET, Drunk, "move_m@drunk@verydrunk", 1.0f);
+            if (!Function.Call<bool>(Hash.HAS_CLIP_SET_LOADED, "move_m@drunk@verydrunk"))
+            {
+                Function.Call(Hash.REQUEST_CLIP_SET, "move_m@drunk@verydrunk");
+            }
+            Function.Call(Hash.SET_PED_MOVEMENT_CLIPSET, Drunk.Handle, "move_m@drunk@verydrunk", 1.0f);
             Function.Call(Hash.SET_PED_CAN_RAGDOLL, Drunk, false);
 
             groupMembers.Add(Drunk);
@@ -405,36 +407,36 @@ namespace Club_Management
 
         private void pedPassive()
         {
-            groupMembers[0].Task.ClearAllImmediately();
-            Function.Call(Hash.TASK_LOOK_AT_ENTITY, groupMembers[0], Player, -1, 2048, 3);
-            groupMembers[0].Task.TurnTo(Player.Position, -1);
+            Drunk.Task.ClearAllImmediately();
+            Function.Call(Hash.TASK_LOOK_AT_ENTITY, Drunk, Player, -1, 2048, 3);
+            Drunk.Task.TurnTo(Player.Position, -1);
             Player.Task.ClearAllImmediately();
-            Player.Task.TurnTo(groupMembers[0].Position, -1);
+            Player.Task.TurnTo(Drunk.Position, -1);
             Player.Task.PlayAnimation("mini@strip_club@idles@bouncer@go_away", "go_away", 1.0f, 5000, true, 1.0f);
             Function.Call(Hash._PLAY_AMBIENT_SPEECH1, Player, "GENERIC_FUCK_YOU", "SPEECH_PARAMS_STANDARD");
             Wait(5000);
-            Function.Call(Hash._PLAY_AMBIENT_SPEECH1, groupMembers[0], "APOLOGY_NO_TROUBLE", "SPEECH_PARAMS_STANDARD");
-            groupMembers[0].Task.ClearAllImmediately();
-            groupMembers[0].Task.FleeFrom(Player);
+            Function.Call(Hash._PLAY_AMBIENT_SPEECH1, Drunk, "APOLOGY_NO_TROUBLE", "SPEECH_PARAMS_STANDARD");
+            Drunk.Task.ClearAllImmediately();
+            Drunk.Task.FleeFrom(Player);
         }
 
         private void pedAggressive()
         {
-            groupMembers[0].Task.ClearAllImmediately();
-            Function.Call(Hash.SET_PED_COMBAT_ATTRIBUTES, groupMembers[0], 46, true);
-            Function.Call(Hash.SET_PED_COMBAT_ATTRIBUTES, groupMembers[0], 5, true);
-            Function.Call(Hash.TASK_LOOK_AT_ENTITY, groupMembers[0], Player, -1, 2048, 3);
-            groupMembers[0].Task.TurnTo(Player.Position, -1);
-            Function.Call(Hash._PLAY_AMBIENT_SPEECH1, groupMembers[0], "GENERIC_FUCK_YOU", "SPEECH_PARAMS_STANDARD");
+            Drunk.Task.ClearAllImmediately();
+            Function.Call(Hash.SET_PED_COMBAT_ATTRIBUTES, Drunk, 46, true);
+            Function.Call(Hash.SET_PED_COMBAT_ATTRIBUTES, Drunk, 5, true);
+            Function.Call(Hash.TASK_LOOK_AT_ENTITY, Drunk, Player, -1, 2048, 3);
+            Drunk.Task.TurnTo(Player.Position, -1);
             Player.Task.ClearAllImmediately();
-            Player.Task.TurnTo(groupMembers[0].Position, -1);
+            Player.Task.TurnTo(Drunk.Position, -1);
             Player.Task.PlayAnimation("mini@strip_club@idles@bouncer@go_away", "go_away", 1.0f, 5000, true, 1.0f);
             Function.Call(Hash._PLAY_AMBIENT_SPEECH1, Player, "GENERIC_FUCK_YOU", "SPEECH_PARAMS_STANDARD");
             Wait(5000);
-            groupMembers[0].Task.ClearAllImmediately();
-            groupMembers[0].CurrentBlip.Sprite = BlipSprite.Standard;
-            groupMembers[0].CurrentBlip.Color = BlipColor.Red;
-            Function.Call(Hash.TASK_COMBAT_PED, groupMembers[0], Player, 0, 16);
+            Drunk.Task.ClearAllImmediately();
+            Function.Call(Hash._PLAY_AMBIENT_SPEECH1, Drunk, "GENERIC_FUCK_YOU", "SPEECH_PARAMS_STANDARD");
+            Drunk.CurrentBlip.Sprite = BlipSprite.Standard;
+            Drunk.CurrentBlip.Color = BlipColor.Red;
+            Function.Call(Hash.TASK_COMBAT_PED, Drunk, Player, 0, 16);
         }
     }
 }

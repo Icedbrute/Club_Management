@@ -8,9 +8,9 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("Club_Management")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("Echo-Cloud")]
+[assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("Club Management")]
-[assembly: AssemblyCopyright("Copyright © Echo-Cloud 2017")]
+[assembly: AssemblyCopyright("Copyright © Icedbrute 2017")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
